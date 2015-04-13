@@ -85,7 +85,6 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
     sfe100, sfe10, sfe1 = 1.0, 0.1, 0.01
 
     for i, x in enumerate([x1, x2, x3]):
-        #set_trace()
         sel = (np.isfinite(x)) & (np.isfinite(y))
         sel2 = sel & (y > -6)
         
@@ -169,13 +168,18 @@ def main(**kwargs):
         time_bins[i,:] = [float(ts), float(te)]
 
     sfr100 = get_avg_sfr(sfr_array, time_bins)
+    sfr10 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=7.0)
+    sfr10_100 = get_avg_sfr(sfr_array, time_bins, tstart=7.0, tstop=8.0)
+    sfr316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
+    sfr400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
     sigma_sfr = sfr_array / pix_area
-    sigma_sfr_100 = sfr100 / pix_area
 
+    sfr_time = sfr10_100
+    sigma_sfr_time = sfr_time / pix_area
 
-    sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_100))
+    sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
  
-    plot_data(sigma_sfr[:,sel], sigma_sfr_100[sel],
+    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
               sigma_hi.flatten()[sel], sigma_co.flatten()[sel], 
               save=kwargs['save'])
 

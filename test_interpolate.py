@@ -27,7 +27,7 @@ sfr_reverse = sfr[::-1]
 mass_reverse = mass[::-1]
 cum_mass_reverse = np.cumsum(mass_reverse)
 
-sel = tf_reverse <= 8.0
+sel = t0_reverse <= 8.0
 t0_sel = t0_reverse[sel]
 tf_sel = tf_reverse[sel]
 tmid_sel = tmid_reverse[sel]
@@ -44,24 +44,45 @@ time = np.append(tf_sel, 0)
 new_x = []
 new_cum_mass = []
 new_sfr = []
-for i in range(len(tf_sel)-1):
-    x = [10**tf_sel[i]/1e6, 10**tf_sel[i+1]/1e6]
-    y = [cum_mass_sel[i], cum_mass_sel[i+1]]
+for i in range(1, len(tf_sel)):
+    x = [10**tf_sel[i]/1e6, 10**t0_sel[i]/1e6]
+    y = [cum_mass_sel[i-1], cum_mass_sel[i]]
     f = interp1d(x, y, bounds_error=False)
     
-    num = abs(int(x[0] - x[1]))
-    xx = np.linspace(x[0], x[1], num+1) # time in Myr
+    num = abs(int(np.around(x[0]) - np.around(x[1])))
+    xx = np.linspace(np.around(x[0]), np.around(x[1]), num+1) # time in Myr
     yy = f(xx)  #cumulative mass
  
     tmp1 = (xx[:-1] - xx[1:]) * 1e6  # time diff in yr
     tmp2 = yy[1:] - yy[:-1]  # mass formed per time bin in M_sun
     yy2 = tmp2 / tmp1 # sfr per time bin in M_sun / yr
 
-    new_x.append(xx)
-    new_cum_mass.append(yy)
-    new_sfr.append(yy2)
+    if np.isnan(yy[-1]):
+        yy[-1] = yy[-2]
+    if np.isnan(yy[0]):
+        yy[0] = yy[1]
+
+    if i == len(tf_sel)-1:
+        xx[-1] = 0
+        [new_x.append(xxx) for xxx in xx]
+        [new_cum_mass.append(yyy) for yyy in yy]
+    else:
+        [new_x.append(xxx) for xxx in xx[:-1]]
+        [new_cum_mass.append(yyy) for yyy in yy[:-1]]
+    [new_sfr.append(yyy2) for yyy2 in yy2]
+   
 
 
+plt.figure()
+plt.plot(10**t0_sel/1e6, cum_mass_sel, 'k', lw=2)
+plt.plot(10**t0_sel/1e6, cum_mass_sel, 'r.', ms=15)
+plt.gca().invert_xaxis()
+plt.xlim(105, -5)
+plt.plot(new_x, new_cum_mass, 'b--', lw=2)
+plt.plot(new_x, new_cum_mass, 'y.', ms=10)
+
+plt.show()
+exit()
 x = 10**tf_sel/1e6
 y = cum_mass_sel
 f = interp1d(x, y, bounds_error=False)

@@ -121,7 +121,7 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
         
     plt.subplots_adjust(left=0.08, right=0.95, bottom=0.12, top=0.95,
                         wspace=0.02)
-
+    
     if save:
         plt.savefig(PLOT_DIR + 'sf_law_hi+h2.png', bbox_inches='tight', dpi=300)
     else:
@@ -140,6 +140,7 @@ def main(**kwargs):
     relation in M31. """
     hi_file = DATA_DIR + 'hi_braun.fits'
     co_file = DATA_DIR + 'co_nieten.fits'
+    #co_file = DATA_DIR + 'co_carma.fits'
     sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*.fits'))[:14]
 
     # Get the gas: HI and CO
@@ -178,11 +179,14 @@ def main(**kwargs):
     sigma_sfr_time = sfr_time / pix_area
 
     sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
- 
-    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-              sigma_hi.flatten()[sel], sigma_co.flatten()[sel], 
-              save=kwargs['save'])
+
+
+    return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
+    
+#    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
+#              sigma_hi.flatten()[sel], sigma_co.flatten()[sel], 
+#              save=kwargs['save'])
 
 if __name__ == '__main__':
     args = get_args()
-    main(**vars(args))
+    sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))

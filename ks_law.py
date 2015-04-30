@@ -70,10 +70,34 @@ def get_avg_sfr(sfr_array, timebins, tstart=6.6, tstop=8.0):
         reg_mass = np.sum(mass100[:,i][np.isfinite(mass100[:,i])])
         total_mass[i] = reg_mass
     sfr100 = total_mass / (10**tstop - 10**tstart)
-    return sfr100
+    return sfr100, [10**tstart, 10**tstop]
 
 
-def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
+def convert_to_density(data, dtype):
+    if dtype == 'hi':
+        sigma = 10**data * M_H * CM_TO_PC**2 / M_SUN
+    elif dtype == 'co':
+        sigma = data * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
+    return sigma
+
+
+def get_color_scheme(n):
+    cm = plt.get_cmap('RdYlBu_r')
+    color = [cm(1.*i/(n-1)) for i in range(n)]
+    return color
+
+
+def plot_contour(ax, xx, yy, bins=50, lw=2):
+    H, xedges, yedges = np.histogram2d(xx, yy, bins=bins)
+    extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+    levels = (1, 5, 10, 20, 50)
+    colors = get_color_scheme(len(levels))
+    cset = ax.contour(H.T, levels, origin='lower', extent=extent, 
+                      linewidths=lw, colors=colors)
+
+
+def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None, 
+              save=False):
     f, ax = plt.subplots(1, 3, figsize=(10, 4))
 
     x1 = np.log10(sigma_hi)
@@ -94,8 +118,10 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
         print 'A = ', p[1]
         print 'N = ', p[0]
 
+        nn = str(np.around(p[0], 2))
 
-        ax[i].scatter(x[sel], y[sel], s=3, color='k')
+        ax[i].scatter(x[sel], y[sel], s=1, color='k')
+        plot_contour(ax[i], x[sel], y[sel])
 
         for sfe in [sfe100, sfe10, sfe1]:
             sigsfr = sfe * sgas / 1e8 * 1e6
@@ -110,14 +136,25 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
         ax[i].set_xlim(-2.5, 2)
         ax[i].set_ylim(-6, -1)
         ax[i].xaxis.set_ticks([-2, -1, 0, 1, 2])
-        ax[1].yaxis.set_ticks([])
-        ax[2].yaxis.set_ticks([])
+        ax[i].tick_params(axis='both', labelsize=14)
+
+        ax[i].text(0.06, 0.9, 'N = ' + nn, fontsize=14, 
+                       transform=ax[i].transAxes)
+
+
+    ax[1].yaxis.set_ticks([])
+    ax[2].yaxis.set_ticks([])
         
     ax[0].set_ylabel(r'${\rm log}_{10}\, \Sigma_{\rm SFR}\, \left[{\rm M}_{\odot} \, {\rm yr}^{-1} \, {\rm kpc}^{-2}\right]$', fontsize=18)
     ax[0].set_xlabel(r'${\rm log}_{10}\, \Sigma_{\rm HI} \, \left[{\rm M}_{\odot} \, {\rm pc}^{-2}\right]$', fontsize=18)
     ax[1].set_xlabel(r'${\rm log}_{10}\, \Sigma_{\rm H_2} \, \left[{\rm M}_{\odot} \, {\rm pc}^{-2}\right]$', fontsize=18)
     ax[2].set_xlabel(r'${\rm log}_{10}\, \Sigma_{\rm HI+H_2} \, \left[{\rm M}_{\odot} \, {\rm pc}^{-2}\right]$', fontsize=18)
 
+    if time is not None:
+        if time[0] == 10**6.6/1e6:
+            time[0] = 0
+        time_str = str(int(time[0])) + ' -- ' + str(int(time[1])) + ' Myr'
+        ax[0].text(.06, 0.8, time_str, fontsize=16, transform=ax[0].transAxes) 
         
     plt.subplots_adjust(left=0.08, right=0.95, bottom=0.12, top=0.95,
                         wspace=0.02)
@@ -127,13 +164,6 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, save=False):
     else:
         plt.show()
 
-def convert_to_density(data, dtype):
-    if dtype == 'hi':
-        sigma = 10**data * M_H * CM_TO_PC**2 / M_SUN
-    elif dtype == 'co':
-        sigma = data * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
-    return sigma
-
 
 def main(**kwargs):
     """ Spatially- and temporally-resolved Kennicutt-Schmidt star formation
@@ -141,52 +171,63 @@ def main(**kwargs):
     hi_file = DATA_DIR + 'hi_braun.fits'
     co_file = DATA_DIR + 'co_nieten.fits'
     #co_file = DATA_DIR + 'co_carma.fits'
-    sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*.fits'))[:14]
+    sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*.fits'))#[:14]
 
-    # Get the gas: HI and CO
+    # get the gas: HI and CO
     hi_data, hi_hdr = get_data(hi_file)
     co_data, co_hdr = get_data(co_file)
 
+    # determine pixel area
     dthetax = np.radians(np.abs(hi_hdr['cdelt1']))
     dthetay = np.radians(np.abs(hi_hdr['cdelt2']))
     dx, dy = np.tan(dthetax) * D_M31, np.tan(dthetay) * D_M31
     pix_area = dx * dy
 
+    # convert gas to surface density
     sigma_hi = convert_to_density(hi_data, 'hi')
     sigma_co = convert_to_density(co_data, 'co')
     
     n_times = len(sfr_files)
     n_regions = len(sigma_hi.flatten())
 
+    # set up SFR array
     sfr_array = np.zeros((n_times, n_regions))
     time_bins = np.zeros((n_times, 2))
     for i in range(n_times):
         sfr_data, sfr_hdr = pyfits.getdata(sfr_files[i], header=True)
         ts, te = sfr_files[i].split('/')[-1].rstrip('.fits').split('_')[-1].split('-')
-        if te == '6.7':
-            sfr_data = sfr_data * (10**6.7 - 10**6.6) / 10**6.7
+        #if te == '6.7':
+        #    sfr_data = sfr_data * (10**6.7 - 10**6.6) / 10**6.7
         sfr_array[i,:] = sfr_data.flatten()
         time_bins[i,:] = [float(ts), float(te)]
 
-    sfr100 = get_avg_sfr(sfr_array, time_bins)
-    sfr10 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=7.0)
-    sfr10_100 = get_avg_sfr(sfr_array, time_bins, tstart=7.0, tstop=8.0)
-    sfr316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
-    sfr400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
-    sigma_sfr = sfr_array / pix_area
+    # compute sfrs in different time bins
+    sfr100, t100 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.0)
+    sfr10, t10 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=7.0)
+    sfr10_100, t10_100 =get_avg_sfr(sfr_array, time_bins, tstart=7.0, tstop=8.0)
+    sfr316, t316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
+    sfr400, t400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
+    sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5, 
+                                       tstop=8.6)
+    sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0, 
+                                       tstop=8.6)
 
-    sfr_time = sfr10_100
+    # select desired sfr time
+    sigma_sfr = sfr_array / pix_area
+    sfr_time, t_time = sfr100, np.array(t100)/1e6
     sigma_sfr_time = sfr_time / pix_area
 
+    # choose only regions where values are finite
     sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
 
 
-    return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
-    
-#    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-#              sigma_hi.flatten()[sel], sigma_co.flatten()[sel], 
-#              save=kwargs['save'])
+    #return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
+
+    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
+              sigma_hi.flatten()[sel], sigma_co.flatten()[sel], time=t_time,
+              save=kwargs['save'])
 
 if __name__ == '__main__':
     args = get_args()
-    sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))
+    #sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))
+    main(**vars(args))

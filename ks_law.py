@@ -1,6 +1,8 @@
 import numpy as np
 import astropy.io.fits as pyfits
 import astropy.wcs as pywcs
+import astropy.units as u
+from astropy.coordinates import SkyCoord, ICRS, Distance, Angle
 import glob
 import sys, os
 import matplotlib.pyplot as plt
@@ -57,8 +59,20 @@ def get_data(datafile):
     return data, hdr
 
 
-def get_coords(reg_ra, reg_dec):
-    coords = np.array(zip(reg_ra, reg_dec))
+def get_coords(data, hdr, m31_ra=10.6833, m31_dec=41.2692, pa=38.5, incl=77.):
+    w = pywcs.WCS(hdr, naxis=2)
+    orig_shape = (data.shape[0], data.shape[1])
+    x, y = np.arange(data.shape[0]), np.arange(data.shape[1])
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    xx, yy = X.flatten(), Y.flatten()
+    pixels = np.array(zip(yy,xx))
+    pixel_matrix = pixels.reshape(data.shape[0], data.shape[1], 2)
+    world = w.wcs_pix2world(pixels, 1)
+    world_matrix = world.reshape(data.shape[0], data.shape[1], 2)
+    
+    points = SkyCoord(world, 'icrs', unit=w.wcs.cunit)
+    coords = zip(points.ra, points.dec)
+
     coord = SkyCoord(coords, unit=u.deg)
     rads, theta = deproject.correct_rgc(coord, 
                                         glx_ctr=SkyCoord(m31_ra,m31_dec,
@@ -67,7 +81,7 @@ def get_coords(reg_ra, reg_dec):
                                         glx_incl=Angle(incl, unit=u.deg), 
                                         glx_dist=Distance(783, unit=u.kpc))
 
-    return rads, theta
+    return rads.reshape(orig_shape), theta.reshape(orig_shape)
 
 
 
@@ -131,8 +145,8 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
         p = np.polyfit(x[sel2], y[sel2], 1)
         #p = curve_fit(linear_fit, x[sel], y[sel])
 
-        print 'A = ', p[1]
-        print 'N = ', p[0]
+        #print 'A = ', p[1]
+        #print 'N = ', p[0]
 
         nn = str(np.around(p[0], 2))
 
@@ -176,7 +190,12 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
                         wspace=0.02)
     
     if save:
-        plt.savefig(PLOT_DIR + 'sf_law_hi+h2.png', bbox_inches='tight', dpi=300)
+        if time is not None:
+            time_str2 = str(int(time[0])) + '-' + str(int(time[1]))
+            plotfile = PLOT_DIR + 'sf_law_hi+h2_' + time_str2 + '.png'
+        else:
+            plotfile = PLOT_DIR + 'sf_law_hi+h2.png'
+        plt.savefig(plotfile, bbox_inches='tight', dpi=300)
     else:
         plt.show()
 
@@ -199,10 +218,14 @@ def main(**kwargs):
     dx, dy = np.tan(dthetax) * D_M31, np.tan(dthetay) * D_M31
     pix_area = dx * dy
 
+    # get galactocentric distances
+    #  only need to use one set of data because they're all on the same grid
+    rads, theta = get_coords(hi_data, hi_hdr)
+
     # convert gas to surface density
     sigma_hi = convert_to_density(hi_data, 'hi')
     sigma_co = convert_to_density(co_data, 'co')
-    
+
     n_times = len(sfr_files)
     n_regions = len(sigma_hi.flatten())
 
@@ -228,20 +251,27 @@ def main(**kwargs):
     sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0, 
                                        tstop=8.6)
 
+
+    sfarray = [sfr10, sfr100, sfr10_100, sfr316, sfr400, sfr300_400, sfr100_400]
+    tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400]
+
     # select desired sfr time
-    sigma_sfr = sfr_array / pix_area
-    sfr_time, t_time = sfr100, np.array(t100)/1e6
-    sigma_sfr_time = sfr_time / pix_area
+    for ind in range(len(sfarray)):
+    #ind = 0
+        sigma_sfr = sfr_array / pix_area
+        sfr_time, t_time = sfarray[ind], np.array(tarray[ind])/1e6
+#sfr10, np.array(t100)/1e6
+        sigma_sfr_time = sfr_time / pix_area
 
     # choose only regions where values are finite
-    sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
+        sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
 
 
     #return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
-    plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-              sigma_hi.flatten()[sel], sigma_co.flatten()[sel], time=t_time,
-              save=kwargs['save'])
+        plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
+                  sigma_hi.flatten()[sel], sigma_co.flatten()[sel], time=t_time,
+                  save=kwargs['save'])
 
 if __name__ == '__main__':
     args = get_args()

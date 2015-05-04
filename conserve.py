@@ -54,7 +54,7 @@ for infile in [file1,file2]:
     xx, yy = X.flatten(), Y.flatten()
     pixels = np.array(zip(yy,xx))
     pixel_matrix = pixels.reshape(data.shape[0], data.shape[1], 2)
-    world = w.wcs_pix2world((pixels), 1)
+    world = w.wcs_pix2world(pixels, 1)
     world_matrix = world.reshape(data.shape[0], data.shape[1], 2)
 
     pixelfoot = w.wcs_world2pix(zip(rafoot, decfoot), 1)

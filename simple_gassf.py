@@ -42,27 +42,27 @@ brick = str(sys.argv[1]).zfill(2)
 
 #topdir = '/astro/store/student-scratch1/arlewis/PHAT/ism/'
 topdir = '/Users/alexialewis/research/PHAT/ism/'
-bdir = 'b'+brick+'/'
-indir = topdir+'working_data/'+bdir
-plotdir = topdir+'plots/'
+bdir = 'b' + brick + '/'
+indir = topdir + 'working_data/' + bdir
+plotdir = topdir + 'plots/'
 
-co = pyfits.getdata(indir+'co_on_sfh.fits')
-hi = pyfits.getdata(indir+'hi_on_sfh.fits')
-#ebv = pyfits.getdata(indir+'ebv_on_sfh.fits')
-mdust = pyfits.getdata(indir+'mdust_on_sfh.fits')
-fuv = pyfits.getdata(indir+'fuv_on_sfh.fits')
-nuv = pyfits.getdata(indir+'nuv_on_sfh.fits')
-ha = pyfits.getdata(indir+'ha_on_sfh.fits')
-i24 = pyfits.getdata(indir+'mips24_on_sfh.fits')
-jdebv = pyfits.getdata(indir+'jd_ebv_on_sfh.fits')
+co = pyfits.getdata(indir + 'co_on_sfh.fits')
+hi = pyfits.getdata(indir + 'hi_on_sfh.fits')
+#ebv = pyfits.getdata(indir + 'ebv_on_sfh.fits')
+mdust = pyfits.getdata(indir + 'mdust_on_sfh.fits')
+fuv = pyfits.getdata(indir + 'fuv_on_sfh.fits')
+nuv = pyfits.getdata(indir + 'nuv_on_sfh.fits')
+ha = pyfits.getdata(indir + 'ha_on_sfh.fits')
+i24 = pyfits.getdata(indir + 'mips24_on_sfh.fits')
+jdebv = pyfits.getdata(indir + 'jd_ebv_on_sfh.fits')
 
 ## Get the star formation history cube.
-sfh, sfh_hdr = pyfits.getdata(indir+'sfh_cube.fits', 0, header=True)
+sfh, sfh_hdr = pyfits.getdata(indir + 'sfh_cube.fits', 0, header=True)
 
 ## Make the time axis and note the size of the cube
 v = np.arange(sfh_hdr['NAXIS3'])
 vdif = v - (sfh_hdr['CRPIX3'] - 1)
-taxis = (vdif * sfh_hdr['CDELT3']+ sfh_hdr['CRVAL3'])
+taxis = (vdif * sfh_hdr['CDELT3'] + sfh_hdr['CRVAL3'])
 
 sz = sfh.shape
 

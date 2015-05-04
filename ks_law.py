@@ -1,9 +1,11 @@
 import numpy as np
 import astropy.io.fits as pyfits
+import astropy.wcs as pywcs
 import glob
 import sys, os
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+import deproject
 from pdb import set_trace
 
 # Global Parameters
@@ -23,7 +25,7 @@ else:
     
 
 DATA_DIR = TOP_DIR + 'maps/analysis/'
-ISM_DIR = TOP_DIR + 'ism/'
+ISM_DIR = TOP_DIR + 'ism/project/'
 PLOT_DIR = ISM_DIR + 'plots/'
 
 def get_args():
@@ -53,6 +55,20 @@ def get_data(datafile):
 
     data, hdr = pyfits.getdata(datafile, header=True)
     return data, hdr
+
+
+def get_coords(reg_ra, reg_dec):
+    coords = np.array(zip(reg_ra, reg_dec))
+    coord = SkyCoord(coords, unit=u.deg)
+    rads, theta = deproject.correct_rgc(coord, 
+                                        glx_ctr=SkyCoord(m31_ra,m31_dec,
+                                                         unit=u.deg),
+                                        glx_PA=Angle(pa, unit=u.deg), 
+                                        glx_incl=Angle(incl, unit=u.deg), 
+                                        glx_dist=Distance(783, unit=u.kpc))
+
+    return rads, theta
+
 
 
 def linear_fit(x, a, b):

@@ -256,8 +256,8 @@ def main(**kwargs):
     tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400]
 
     # select desired sfr time
-    for ind in range(len(sfarray)):
-    #ind = 0
+    #for ind in range(len(sfarray)):
+    for ind in [1]:
         sigma_sfr = sfr_array / pix_area
         sfr_time, t_time = sfarray[ind], np.array(tarray[ind])/1e6
 #sfr10, np.array(t100)/1e6
@@ -267,7 +267,7 @@ def main(**kwargs):
         sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
 
 
-    #return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
+        return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
         plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
                   sigma_hi.flatten()[sel], sigma_co.flatten()[sel], time=t_time,
@@ -275,5 +275,5 @@ def main(**kwargs):
 
 if __name__ == '__main__':
     args = get_args()
-    #sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))
-    main(**vars(args))
+    sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))
+    #main(**vars(args))

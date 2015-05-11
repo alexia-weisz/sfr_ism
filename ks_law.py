@@ -18,6 +18,7 @@ M_SUN = 1.99e33  #g
 CM_TO_PC = 3.086e18  #cm / pc
 XCO = 2e20 #atom / cm^2  Strong & Mattox 1996, Dame et al 2001
 ALPHA_CO = 4.35  #Msun / pc^2 (K km / s)^-1; equivalent to above XCO
+INCL = np.radians(77.)
 
 if os.environ['PATH'][1:6] == 'astro':
     TOP_DIR = '/astro/store/phat/arlewis/'
@@ -59,7 +60,8 @@ def get_data(datafile):
     return data, hdr
 
 
-def get_coords(data, hdr, m31_ra=10.6833, m31_dec=41.2692, pa=38.5, incl=77.):
+def get_coords(data, hdr, m31_ra=10.6833, m31_dec=41.2692,
+               pa=38.5, incl=77.):
     w = pywcs.WCS(hdr, naxis=2)
     orig_shape = (data.shape[0], data.shape[1])
     x, y = np.arange(data.shape[0]), np.arange(data.shape[1])
@@ -104,10 +106,15 @@ def get_avg_sfr(sfr_array, timebins, tstart=6.6, tstop=8.0):
 
 
 def convert_to_density(data, dtype):
+    ## multiply by cos(incl) here to account for inclination
+    ## need to multiply instead of divide because this is affecting the
+    ## data itself, not just the area
+    ## data * incl
+    ## sfr / (area / incl) = sfr / area * incl
     if dtype == 'hi':
-        sigma = 10**data * M_H * CM_TO_PC**2 / M_SUN
+        sigma = 10**data * np.cos(INCL) * M_H * CM_TO_PC**2 / M_SUN
     elif dtype == 'co':
-        sigma = data * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
+        sigma = data * np.cos(INCL) * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
     return sigma
 
 
@@ -216,7 +223,7 @@ def main(**kwargs):
     dthetax = np.radians(np.abs(hi_hdr['cdelt1']))
     dthetay = np.radians(np.abs(hi_hdr['cdelt2']))
     dx, dy = np.tan(dthetax) * D_M31, np.tan(dthetay) * D_M31
-    pix_area = dx * dy
+    pix_area = dx * dy / np.cos(INCL)
 
     # get galactocentric distances
     #  only need to use one set of data because they're all on the same grid
@@ -256,8 +263,8 @@ def main(**kwargs):
     tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400]
 
     # select desired sfr time
-    #for ind in range(len(sfarray)):
-    for ind in [1]:
+    for ind in range(len(sfarray)):
+    #for ind in [1]:
         sigma_sfr = sfr_array / pix_area
         sfr_time, t_time = sfarray[ind], np.array(tarray[ind])/1e6
 #sfr10, np.array(t100)/1e6
@@ -267,11 +274,11 @@ def main(**kwargs):
         sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
 
 
-        return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
+        #return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
         plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-                  sigma_hi.flatten()[sel], sigma_co.flatten()[sel], time=t_time,
-                  save=kwargs['save'])
+                  sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
+                  time=t_time, save=kwargs['save'])
 
 if __name__ == '__main__':
     args = get_args()

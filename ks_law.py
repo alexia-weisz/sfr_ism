@@ -6,6 +6,7 @@ from astropy.coordinates import SkyCoord, ICRS, Distance, Angle
 import glob
 import sys, os
 import matplotlib.pyplot as plt
+from matplotlib.path import Path
 from scipy.optimize import curve_fit
 import deproject
 from pdb import set_trace
@@ -35,10 +36,42 @@ def get_args():
     """ Grab the command line arguments if necessary. """
     import argparse
     parser = argparse.ArgumentParser(description='Gather SFR and HI, H2 surface densities for KS law analysis.')
+    parser.add_argument('--plot', action='store_true', help='plot.')
     parser.add_argument('--save', action='store_true', help='Save plots.')
     parser.add_argument('--home', action='store_true',
                         help='Set if on laptop, to change top directory.')
     return parser.parse_args()
+
+
+def get_reg_coords(regfile):
+    f = open(regfile, 'r')
+    lines = f.readlines()
+    f.close()
+    regs = lines[3:]
+    nregs = len(regs)
+
+    regpaths = []
+    reg_coords_x = []
+    reg_coords_y = []
+    for r in regs:
+        reg_str = r.lstrip('polygon(').rstrip(')\n').split(',')
+        reg_flt = np.array([float(x) for x in reg_str])
+        regpath = Path(zip(reg_flt[0::2], reg_flt[1::2]))
+        regpaths.append(regpath)
+
+    return regpaths
+
+
+def get_pixel_coords(data, hdr):
+    indexing = 'ij'
+    w = pywcs.WCS(hdr, naxis=2)
+    x, y = np.arange(data.shape[0]), np.arange(data.shape[1])
+    X, Y = np.meshgrid(x, y, indexing=indexing)
+    xx, yy = X.flatten(), Y.flatten()
+    pixels = np.array(zip(yy,xx))
+    pixel_matrix = pixels.reshape(data.shape[0], data.shape[1], 2)
+
+    return pixels
 
 
 def get_data(datafile):
@@ -72,12 +105,12 @@ def get_coords(data, hdr, m31_ra=10.6833, m31_dec=41.2692,
     world = w.wcs_pix2world(pixels, 1)
     world_matrix = world.reshape(data.shape[0], data.shape[1], 2)
     
-    points = SkyCoord(world, 'icrs', unit=w.wcs.cunit)
+    points = SkyCoord(world, frame='icrs', unit=w.wcs.cunit)
     coords = zip(points.ra, points.dec)
 
     coord = SkyCoord(coords, unit=u.deg)
     rads, theta = deproject.correct_rgc(coord, 
-                                        glx_ctr=SkyCoord(m31_ra,m31_dec,
+                                        glx_ctr=SkyCoord(m31_ra, m31_dec,
                                                          unit=u.deg),
                                         glx_PA=Angle(pa, unit=u.deg), 
                                         glx_incl=Angle(incl, unit=u.deg), 
@@ -164,7 +197,7 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
             sigsfr = sfe * sgas / 1e8 * 1e6
             ax[i].plot(np.log10(sgas), np.log10(sigsfr), 'r--', lw=2)
 
-        ax[i].plot(np.log10(sgas), p[1] + p[0] * np.log10(sgas),'b', lw=3)
+        #ax[i].plot(np.log10(sgas), p[1] + p[0] * np.log10(sgas),'b', lw=3)
         #ax[0].plot(np.log10(sgas), -6.5 + 3.2 * np.log10(sgas), 'c', lw=3)
         #ax[1].plot(np.log10(sgas), -2.0 + 3.0 * np.log10(sgas), 'c', lw=3)
         #ax[2].plot(np.log10(sgas), -6.6 + 3.25 * np.log10(sgas), 'c', lw=3)
@@ -191,7 +224,8 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
         if time[0] == 10**6.6/1e6:
             time[0] = 0
         time_str = str(int(time[0])) + ' -- ' + str(int(time[1])) + ' Myr'
-        ax[0].text(.06, 0.8, time_str, fontsize=16, transform=ax[0].transAxes) 
+        ax[0].text(.06, 0.8, time_str, fontsize=16,
+                   transform=ax[0].transAxes) 
         
     plt.subplots_adjust(left=0.08, right=0.95, bottom=0.12, top=0.95,
                         wspace=0.02)
@@ -213,11 +247,20 @@ def main(**kwargs):
     hi_file = DATA_DIR + 'hi_braun.fits'
     co_file = DATA_DIR + 'co_nieten.fits'
     #co_file = DATA_DIR + 'co_carma.fits'
-    sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*.fits'))#[:14]
+    sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*-*.fits'))#[:14]
+
+    regfile = TOP_DIR + 'ism/project/sf_regions_image.reg'
+    regpaths = get_reg_coords(regfile)
 
     # get the gas: HI and CO
     hi_data, hi_hdr = get_data(hi_file)
     co_data, co_hdr = get_data(co_file)
+
+    dshape = co_data.shape[0], co_data.shape[1]
+    pixels = get_pixel_coords(co_data, co_hdr)
+    ring_reg = regpaths[0].contains_points(pixels).reshape(dshape)
+    inner_reg = regpaths[1].contains_points(pixels).reshape(dshape)
+    outer_reg = regpaths[2].contains_points(pixels).reshape(dshape)
 
     # determine pixel area
     dthetax = np.radians(np.abs(hi_hdr['cdelt1']))
@@ -250,17 +293,23 @@ def main(**kwargs):
     # compute sfrs in different time bins
     sfr100, t100 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.0)
     sfr10, t10 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=7.0)
-    sfr10_100, t10_100 =get_avg_sfr(sfr_array, time_bins, tstart=7.0, tstop=8.0)
+    sfr10_100, t10_100 = get_avg_sfr(sfr_array, time_bins, tstart=7.0,
+                                     tstop=8.0)
     sfr316, t316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
     sfr400, t400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
     sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5, 
                                        tstop=8.6)
     sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0, 
                                        tstop=8.6)
+    sfr30_40, t30_40 = get_avg_sfr(sfr_array, time_bins, tstart=7.5,
+                                   tstop=7.6)
+    sfr20_30, t20_30 = get_avg_sfr(sfr_array, time_bins, tstart=7.3,
+                                   tstop=7.5)
 
-
-    sfarray = [sfr10, sfr100, sfr10_100, sfr316, sfr400, sfr300_400, sfr100_400]
-    tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400]
+    sfarray = [sfr10, sfr100, sfr10_100, sfr316, sfr400, sfr300_400,
+               sfr100_400, sfr30_40, sfr20_30]
+    tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400, t30_40,
+              t20_30]
 
     # select desired sfr time
     for ind in range(len(sfarray)):
@@ -270,15 +319,16 @@ def main(**kwargs):
 #sfr10, np.array(t100)/1e6
         sigma_sfr_time = sfr_time / pix_area
 
-    # choose only regions where values are finite
-        sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))
+        # choose only regions where values are finite
+        sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))# & ((inner_reg.flatten()) | (ring_reg.flatten()) | (outer_reg.flatten()))
 
 
-        #return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
+        if args.plot:
+            plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
+                      sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
+                      time=t_time, save=kwargs['save'])
 
-        plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-                  sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
-                  time=t_time, save=kwargs['save'])
+    return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
 if __name__ == '__main__':
     args = get_args()

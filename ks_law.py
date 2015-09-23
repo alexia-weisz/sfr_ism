@@ -38,8 +38,6 @@ def get_args():
     parser = argparse.ArgumentParser(description='Gather SFR and HI, H2 surface densities for KS law analysis.')
     parser.add_argument('--plot', action='store_true', help='plot.')
     parser.add_argument('--save', action='store_true', help='Save plots.')
-    parser.add_argument('--home', action='store_true',
-                        help='Set if on laptop, to change top directory.')
     return parser.parse_args()
 
 
@@ -147,7 +145,7 @@ def convert_to_density(data, dtype):
     if dtype == 'hi':
         sigma = 10**data * np.cos(INCL) * M_H * CM_TO_PC**2 / M_SUN
     elif dtype == 'co':
-        sigma = data * np.cos(INCL) * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
+        sigma = data * np.cos(INCL) * ALPHA_CO#XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
     return sigma
 
 
@@ -174,7 +172,7 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
     x2 = np.log10(sigma_co)
     x3 = np.log10(sigma_hi + sigma_co)
     y = np.log10(sigma_sfr_100)
-
+    set_trace()
     sgas = 10**np.arange(-12, 3, 0.05)
     sfe100, sfe10, sfe1 = 1.0, 0.1, 0.01
 
@@ -190,7 +188,8 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
 
         nn = str(np.around(p[0], 2))
 
-        ax[i].scatter(x[sel], y[sel], s=1, color='k')
+        #ax[i].scatter(x[sel], y[sel], s=1, color='k')
+        ax[i].scatter(x, y, s=1, color='k')
         plot_contour(ax[i], x[sel], y[sel])
 
         for sfe in [sfe100, sfe10, sfe1]:
@@ -233,7 +232,7 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
     if save:
         if time is not None:
             time_str2 = str(int(time[0])) + '-' + str(int(time[1]))
-            plotfile = PLOT_DIR + 'sf_law_hi+h2_' + time_str2 + '.png'
+            plotfile = PLOT_DIR + 'sf_law_hi+h2_' + time_str2 + '_sfregions.png'
         else:
             plotfile = PLOT_DIR + 'sf_law_hi+h2.png'
         plt.savefig(plotfile, bbox_inches='tight', dpi=300)
@@ -312,22 +311,29 @@ def main(**kwargs):
               t20_30]
 
     # select desired sfr time
-    for ind in range(len(sfarray)):
-    #for ind in [1]:
+    #for ind in range(len(sfarray)):
+    for ind in [1]:
         sigma_sfr = sfr_array / pix_area
         sfr_time, t_time = sfarray[ind], np.array(tarray[ind])/1e6
 #sfr10, np.array(t100)/1e6
         sigma_sfr_time = sfr_time / pix_area
 
         # choose only regions where values are finite
-        sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time))# & ((inner_reg.flatten()) | (ring_reg.flatten()) | (outer_reg.flatten()))
+        sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time)) & ((inner_reg.flatten()) | (ring_reg.flatten()) | (outer_reg.flatten()))
+        
+        #sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_sfr_time)) & ((outer_reg.flatten()))
+
 
 
         if args.plot:
-            plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
-                      sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
+            #plot_data(sigma_sfr[:,sel], sigma_sfr_time[sel],
+            #          sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
+            #          time=t_time, save=kwargs['save'])
+            plot_data(sigma_sfr, sigma_sfr_time,
+                      sigma_hi.flatten(), sigma_co.flatten(),
                       time=t_time, save=kwargs['save'])
 
+            
     return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
 if __name__ == '__main__':

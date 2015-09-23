@@ -12,6 +12,7 @@ import astropy.io.fits as pyfits
 from astropy import wcs
 import os
 import settings
+import correlation
 
 D_M31 = 0.7837 * 10**3  # in kpc
 M_H = 1.6733e-24  #g mass of hydrogen atom
@@ -89,7 +90,7 @@ def convert_to_density(data, dtype):
     if dtype == 'hi':
         sigma = 10**data * np.cos(INCL) * M_H * CM_TO_PC**2 / M_SUN
     elif dtype == 'co':
-        sigma = data * np.cos(INCL) * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN
+        sigma = data * np.cos(INCL) * ALPHA_CO#XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN
     return sigma
 
 
@@ -120,14 +121,16 @@ else:
 _DATA_DIR = _TOP_DIR + 'maps/analysis/'
 _PLOT_DIR = _TOP_DIR + 'ism/project/plots/'
 
-weights = pyfits.getdata(_DATA_DIR + 'weights.fits')
-co_data = pyfits.getdata(_DATA_DIR + 'co_nieten.fits')
-hi_data = pyfits.getdata(_DATA_DIR + 'hi_braun.fits')
-allmdust = pyfits.getdata(_DATA_DIR + 'mdust_draine.fits')
-fuv = pyfits.getdata(_DATA_DIR + 'galex_fuv0.fits')
-nuv = pyfits.getdata(_DATA_DIR + 'galex_nuv0.fits')
-ha = pyfits.getdata(_DATA_DIR + 'ha.fits')
-i24 = pyfits.getdata(_DATA_DIR + 'mips_24.fits')
+res_dir = 'res_200pc/'
+
+weights = pyfits.getdata(_DATA_DIR + res_dir + 'weights_orig.fits')
+co_data, hdr = pyfits.getdata(_DATA_DIR + res_dir + 'co_nieten.fits', header=True)
+hi_data = pyfits.getdata(_DATA_DIR + res_dir + 'hi_braun.fits')
+allmdust = pyfits.getdata(_DATA_DIR + res_dir + 'mdust_draine.fits')
+fuv = pyfits.getdata(_DATA_DIR + res_dir + 'galex_fuv0.fits')
+nuv = pyfits.getdata(_DATA_DIR + res_dir + 'galex_nuv0.fits')
+ha = pyfits.getdata(_DATA_DIR + res_dir + 'ha.fits')
+i24 = pyfits.getdata(_DATA_DIR + res_dir + 'mips_24.fits')
 
 sel1 = weights == 0
 co_data[sel1] = np.nan
@@ -138,7 +141,7 @@ nuv[sel1] = np.nan
 ha[sel1] = np.nan
 i24[sel1] = np.nan
 
-hdr = pyfits.getheader(_DATA_DIR + 'co_nieten.fits')
+#hdr = pyfits.getheader(_DATA_DIR + 'co_nieten.fits')
 
 regfile = _TOP_DIR + 'ism/project/sf_regions_image.reg'
 regpaths = get_reg_coords(regfile)
@@ -160,7 +163,7 @@ outer_reg = regpaths[2].contains_points(pixels).reshape(dshape)
 
 
 ## Get the star formation history cube.
-sfh, sfh_hdr = pyfits.getdata(_DATA_DIR + 'sfr_evo_cube.fits', 0,
+sfh, sfh_hdr = pyfits.getdata(_DATA_DIR + res_dir + 'sfr_evo_cube.fits', 0,
                               header=True)
 
 ## Make the time axis and note the size of the cube
@@ -214,12 +217,12 @@ rcorr_delt_ha_i24, rcorr_delt_fuv_i24 = np.zeros(nt), np.zeros(nt)
 
 
 #sel = inner_reg #ring_reg inner_reg outer_reg None
-sel = ring_reg
+sel = None#ring_reg | inner_reg | outer_reg
 co = allco[sel]
 hi = allhi[sel]
 mdust = allmdust[sel]
 tg = alltg[sel]
-sys.exit()
+
 if sel == None:
     co = co[0,:,:]
     hi = hi[0,:,:]
@@ -289,6 +292,13 @@ p3 = False
 p4 = False
 dpi = 300
 
+
+xlab1 = r'log( t$_{\bf{max}} \;$ [Myr] )'
+xlab2 = 'log( t [Myr] )'
+ylab1 = r'Rank Correlation with $\langle \,$ SFR $\,$(t $<$ t$_{\bf{max}}$) $\, \rangle$'
+ylab2 = 'Rank Correlation with SFR(t)'
+
+
 lcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy']
 fcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy']
 ecol = ['purple', 'PaleVioletRed', 'darkorange', 'navy']
@@ -296,62 +306,22 @@ sym  = ['o', '^', '*', 's']
 ms   = [8, 8, 11, 7]
 lab  = ['CO', 'HI', 'CO+HI', r'$\textit{Herschel}$ M$_{dust}$']
 
-
-
-xlab1 = r'log( t$_{\bf{max}} \;$ [Myr] )'
-xlab2 = 'log( t [Myr] )'
-ylab1 = r'Rank Correlation with $\langle \,$ SFR $\,$(t $<$ t$_{\bf{max}}$) $\, \rangle$'
-ylab2 = 'Rank Correlation with SFR(t)'
-
 if p1:
     yarr = [rcorr_int_co, rcorr_int_hi, rcorr_int_tg, rcorr_int_mdust]
+    pnfile = _PLOT_DIR + 'rcorr_int_sfgas.' + args.format
 
-    fig = plt.figure(figsize=(8,8))
-    plt.plot([-1e6, 1e6], [0,0], '-', color='gray', lw=2)
-
-    for j in range(0, len(yarr)):
-        plt.plot(taxis, yarr[j], sym[j], color=lcol[j], 
-                 markerfacecolor=fcol[j],
-                 markeredgecolor=ecol[j], markersize=ms[j], label=lab[j],
-                 linewidth=2, linestyle='-')
-
-    plt.legend(numpoints=1, markerscale=1.5, frameon=False, loc=0)
-    plt.xlim(taxis[0], taxis[-1])
-    plt.ylim(-0.1, 1.001)
-    plt.xlabel(xlab1, fontsize=18)
-    plt.ylabel(ylab1, fontsize=18)
-    plt.tick_params(axis='both', labelsize=14)
-    
-    if args.save:
-        pnfile = _PLOT_DIR + 'rcorr_int_sfgas.' + args.format
-        plt.savefig(pnfile, dpi=dpi, bbox_inches='tight')
-
+    correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,
+                                 lab, xlab1, ylab1, pnfile, save=args.save)
 
 if p2:
     yarr = [rcorr_delt_co, rcorr_delt_hi, rcorr_delt_tg, rcorr_delt_mdust]
+    pnfile = _PLOT_DIR + 'rcorr_delt_sfgas.' + args.format
+    correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,
+                                 lab, xlab2, ylab2, pnfile, save=args.save)
     
-    fig = plt.figure(figsize=(8,8))
-    plt.plot([-1e6, 1e6], [0,0], '-', color='gray', lw=2)    
+
+
     
-    for j in range(0, len(yarr)):
-        plt.plot(taxis, yarr[j], sym[j], color=lcol[j], mfc=fcol[j],
-                 mec=ecol[j], markersize=ms[j], label=lab[j], linewidth=2,
-                 linestyle='-')
-
-    plt.legend(numpoints=1, markerscale=1.5, frameon=False)
-    plt.xlim(taxis[0], taxis[-1])
-    plt.ylim(-0.2, 1.001)
-    plt.xlabel(xlab2, fontsize=18)
-    plt.ylabel(ylab2, fontsize=18)
-    plt.tick_params(axis='both', labelsize=14)
-
-    if args.save:
-        pnfile = _PLOT_DIR + 'rcorr_delt_sfgas.' + args.format
-        plt.savefig(pnfile, dpi=300, bbox_inches='tight')
-
-
-
-
 lcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
 fcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
 ecol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
@@ -363,51 +333,15 @@ lab  = [r'H$\bf{\alpha}$', 'FUV', 'IR24', r'H$\bf{\alpha}$ + IR24',
 if p3:
     yarr = [rcorr_int_ha, rcorr_int_fuv, rcorr_int_i24, rcorr_int_ha_i24,
             rcorr_int_fuv_i24]
+    pnfile = _PLOT_DIR + 'rcorr_int_sfsf.' + args.format
 
-    fig = plt.figure(figsize=(8,8))
-    plt.plot([-1e6, 1e6], [0,0], '-', color='gray', lw=2)
-
-    for j in range(0, len(yarr)):
-        plt.plot(taxis, yarr[j], sym[j], color=lcol[j], 
-                 markerfacecolor=fcol[j],
-                 markeredgecolor=ecol[j], markersize=ms[j], label=lab[j],
-                 linewidth=2, linestyle='-')
-        
-    plt.legend(numpoints=1, markerscale=1.5, frameon=False)
-    plt.xlim(taxis[0], taxis[-1])
-    plt.ylim(-0.2, 1.001)
-    plt.xlabel(xlab1, fontsize=18)
-    plt.ylabel(ylab1, fontsize=18)
-    plt.tick_params(axis='both', labelsize=14)
-
-    if args.save:
-        pnfile = _PLOT_DIR + 'rcorr_int_sfsf.' + args.format
-        plt.savefig(pnfile, dpi=300, bbox_inches='tight')
+    correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,
+                                 lab, xlab1, ylab1, pnfile, save=args.save)
 
 
 if p4:
     yarr = [rcorr_delt_ha, rcorr_delt_fuv, rcorr_delt_i24, 
             rcorr_delt_ha_i24, rcorr_delt_fuv_i24]
-
-    fig = plt.figure(figsize=(8,8))
-    plt.plot([-1e6, 1e6], [0,0], '-', color='gray', lw=2)    
-
-    for j in range(0, len(yarr)):
-        plt.plot(taxis, yarr[j], sym[j], color=lcol[j], mfc=fcol[j],
-                 mec=ecol[j], markersize=ms[j], label=lab[j], linewidth=2,
-                 linestyle='-')
-
-    plt.legend(numpoints=1, markerscale=1.5, frameon=False)
-    plt.xlim(taxis[0], taxis[-1])
-    plt.ylim(-0.2, 1.001)
-    plt.xlabel(xlab2, fontsize=18)
-    plt.ylabel(ylab2, fontsize=18)
-    plt.tick_params(axis='both', labelsize=14)
-
-    if args.save:
-        pnfile = _PLOT_DIR + 'rcorr_delt_sfsf.' + args.format
-        plt.savefig(pnfile, dpi=300, bbox_inches='tight')
-
-
-if not args.save:
-    plt.show()
+    pnfile = _PLOT_DIR + 'rcorr_delt_sfsf.' + args.format
+    correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,
+                                 lab, xlab2, ylab2, pnfile, save=args.save)

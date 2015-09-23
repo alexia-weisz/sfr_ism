@@ -37,7 +37,7 @@ if os.environ['PATH'][1:6] == 'astro':
 else:
     _TOP_DIR = '/Users/alexialewis/research/PHAT/'
     os.environ['PATH'] = os.environ['PATH'] + ':/usr/texbin'
-    
+
 
 _DATA_DIR = _TOP_DIR + 'maps/analysis/'
 _ISM_DIR = _TOP_DIR + 'ism/project/'
@@ -85,17 +85,26 @@ def convert_to_density(data, dtype):
     if dtype == 'hi':
         sigma = 10**data * np.cos(INCL) * M_H * CM_TO_PC**2 / M_SUN
     elif dtype == 'co':
-        sigma = data * np.cos(INCL) * XCO * 1.36 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
+        sigma = data * np.cos(INCL) * ALPHA_CO#XCO * 1.36 *2 * M_H * CM_TO_PC**2 / M_SUN#ALPHA_CO
     return sigma
+
+
+def calc_int_dep_time(hi, co, area):
+    sfr = 0.28
+    total_co = np.sum(co[np.isfinite(co)] * (area * 1000**2))
+    return total_co / sfr / 1e6 #Myr
 
 
 #def main()
 args = get_args()
 
-weights_file = _DATA_DIR + 'weights.fits'
-hi_file = _DATA_DIR + 'hi_braun.fits'
-co_file = _DATA_DIR + 'co_nieten.fits'
-sfr_files = sorted(glob.glob(_DATA_DIR + 'sfr_evo*.fits'))[:-1]#[:14]
+
+res_dir = 'res_90pc/'
+
+weights_file = _DATA_DIR + res_dir + 'weights_orig.fits'
+hi_file = _DATA_DIR + res_dir + 'hi_braun.fits'
+co_file = _DATA_DIR + res_dir + 'co_nieten.fits'
+sfr_files = sorted(glob.glob(_DATA_DIR + res_dir + 'sfr_evo*.fits'))[:-1]#[:14]
 
 # get the gas: HI and CO
 hi_data, hi_hdr = get_data(hi_file)
@@ -103,17 +112,21 @@ co_data, co_hdr = get_data(co_file)
 weights, w_hdr = get_data(weights_file)
 
 sel1 = weights == 0
+#weights[weights > 0.95] = 1
 
 # determine pixel area
 dthetax = np.radians(np.abs(hi_hdr['cdelt1']))
 dthetay = np.radians(np.abs(hi_hdr['cdelt2']))
-dx, dy = np.tan(dthetax) * D_M31, np.tan(dthetay) * D_M31
+dx, dy = np.tan(dthetax) * D_M31, np.tan(dthetay) * D_M31 #kpc
 pix_area = dx * dy / np.cos(INCL)
 
 # convert gas to surface density
-sigma_hi = convert_to_density(hi_data, 'hi')
-sigma_co = convert_to_density(co_data, 'co')
+sigma_hi = convert_to_density(hi_data, 'hi') * weights
+sigma_co = convert_to_density(co_data, 'co') * weights
 
+total_dep_co = calc_int_dep_time(sigma_hi, sigma_co, pix_area)
+print total_dep_co
+sys.exit()
 n_times = len(sfr_files)
 n_regions = len(sigma_hi.flatten())
 
@@ -134,9 +147,9 @@ sfr10_100, t10_100 =get_avg_sfr(sfr_array, time_bins, tstart=7.0,
                                 tstop=8.0)
 sfr316, t316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
 sfr400, t400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
-sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5, 
+sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5,
                                    tstop=8.6)
-sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0, 
+sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0,
                                    tstop=8.6)
 
 sfarray = [sfr10, sfr100, sfr10_100, sfr316, sfr400, sfr300_400,
@@ -149,12 +162,14 @@ sfrshape = sigma_hi.shape
 
 # select desired sfr time
 #for ind in range(len(sfarray)):
-for ind in [0]:
+for ind in [1]:
     sigma_sfr = (sfarray[ind] / pix_area).reshape(sfrshape)
-    total_gas = sigma_hi + sigma_co
+    total_sigma_co = np.copy(sigma_co)
+    total_sigma_co[np.isnan(total_sigma_co)] = 0.0
+    total_gas = sigma_hi + total_sigma_co
 
     if args.gas == 'hi+co':
-        gas = sigma_co + sigma_hi
+        gas = total_gas
         cb_label = r'{\rm H\,{\sc i}}\,+\,$\rm H_2$'
         xx = 0.99
         plotfile = _PLOT_DIR + 'depletion_time_totalgas.png'
@@ -174,7 +189,7 @@ for ind in [0]:
 
     sigma_sfr[sel1] = np.nan
     gas[sel1] = np.nan
-    
+
     ## multipy gas x 1e6 to convert from pc^-2 to kpc^-2 like sigma_sfr
     tau_dep = gas * 1e6 / sigma_sfr
     cnorm = mcolors.LogNorm(vmin=1e8, vmax=1e11)
@@ -184,7 +199,7 @@ for ind in [0]:
 
     fig = plt.figure(figsize=(4,7))
     plt.clf()
-    
+
     plt.imshow(tau_dep, origin='lower', cmap=cmap,
                interpolation='none', norm=cnorm, aspect='equal')
     plt.gca().set_xticks([])
@@ -192,18 +207,18 @@ for ind in [0]:
 
     plt.text(xx, 0.02, cb_label, transform=plt.gca().transAxes,
              horizontalalignment='right', size=16)
-    
+
     cb = plt.colorbar(pad=0.02)
     cb.set_label('Depletion Time [yr]', fontsize=16)
 
     plt.subplots_adjust(left=-0.5)
-    
+
     if args.save:
         plt.savefig(plotfile, dpi=300, bbox_inches='tight')
         plt.close(fig)
     else:
-        plt.show()    
-    
+        plt.show()
+
 
 #if _name__ == '__main__':
 #    main()

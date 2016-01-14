@@ -10,6 +10,7 @@ import matplotlib.colors as mcolors
 from scipy.optimize import curve_fit
 import deproject
 from pdb import set_trace
+import fitsmaps
 
 
 def get_args():
@@ -89,10 +90,9 @@ def convert_to_density(data, dtype):
     return sigma
 
 
-def calc_int_dep_time(hi, co, area):
-    sfr = 0.28
-    total_co = np.sum(co[np.isfinite(co)] * (area * 1000**2))
-    return total_co / sfr / 1e6 #Myr
+def calc_int_dep_time(gas, area, sfr=0.28):
+    total_gas = np.sum(gas[np.isfinite(gas)] * (area * 1000**2))
+    return total_gas / sfr / 1e6 #Myr
 
 
 #def main()
@@ -124,9 +124,6 @@ pix_area = dx * dy / np.cos(INCL)
 sigma_hi = convert_to_density(hi_data, 'hi') * weights
 sigma_co = convert_to_density(co_data, 'co') * weights
 
-total_dep_co = calc_int_dep_time(sigma_hi, sigma_co, pix_area)
-print total_dep_co
-sys.exit()
 n_times = len(sfr_files)
 n_regions = len(sigma_hi.flatten())
 
@@ -141,9 +138,11 @@ for i in range(n_times):
     time_bins[i,:] = [float(ts), float(te)]
 
 # compute sfrs in different time bins
-sfr100, t100 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.0)
+sfr100, t100 = get_avg_sfr(sfr_array, time_bins,
+                                    tstart=6.6, tstop=8.0)
+
 sfr10, t10 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=7.0)
-sfr10_100, t10_100 =get_avg_sfr(sfr_array, time_bins, tstart=7.0,
+sfr10_100, t10_100 = get_avg_sfr(sfr_array, time_bins, tstart=7.0,
                                 tstop=8.0)
 sfr316, t316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
 sfr400, t400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
@@ -158,15 +157,21 @@ tarray = [t10, t100, t10_100, t316, t400, t300_400, t100_400]
 
 sfrshape = sigma_hi.shape
 
+total_dep_co = calc_int_dep_time(sigma_co, pix_area, sfr=np.sum(sfr100))
+print total_dep_co
+
 ## depeletion timescale = sigma_gas / sigma_sfr
+print calc_int_dep_time(sigma_hi+sigma_co, pix_area, sfr=np.sum(sfr100))
 
 # select desired sfr time
 #for ind in range(len(sfarray)):
 for ind in [1]:
     sigma_sfr = (sfarray[ind] / pix_area).reshape(sfrshape)
+    total_sigma_hi = np.copy(sigma_hi)
+    total_sigma_hi[np.isnan(total_sigma_hi)] = 0.0
     total_sigma_co = np.copy(sigma_co)
     total_sigma_co[np.isnan(total_sigma_co)] = 0.0
-    total_gas = sigma_hi + total_sigma_co
+    total_gas = total_sigma_hi + total_sigma_co
 
     if args.gas == 'hi+co':
         gas = total_gas
@@ -192,6 +197,8 @@ for ind in [1]:
 
     ## multipy gas x 1e6 to convert from pc^-2 to kpc^-2 like sigma_sfr
     tau_dep = gas * 1e6 / sigma_sfr
+    #print tau_dep
+    sys.exit()
     cnorm = mcolors.LogNorm(vmin=1e8, vmax=1e11)
 
     cmap = plt.cm.RdYlBu_r

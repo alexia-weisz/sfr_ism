@@ -30,8 +30,6 @@ def get_args():
     parser.add_argument('--dosmooth', action='store_true', help='Smooth the arrays.')
     parser.add_argument('--save', action='store_true', help='Save plots.')
     parser.add_argument('--format', default='png', help='plotfile format. Default: png')
-    parser.add_argument('--home', action='store_true',
-                        help='Set if on laptop, to change top directory.')
     return parser.parse_args()
 
 
@@ -52,7 +50,7 @@ def get_reg_coords(regfile):
         regpaths.append(regpath)
 
     return regpaths
-        
+
 def get_pixel_coords(data, hdr):
     indexing = 'ij'
     w = wcs.WCS(hdr, naxis=2)
@@ -121,7 +119,7 @@ else:
 _DATA_DIR = _TOP_DIR + 'maps/analysis/'
 _PLOT_DIR = _TOP_DIR + 'ism/project/plots/'
 
-res_dir = 'res_200pc/'
+res_dir = 'res_90pc/'
 
 weights = pyfits.getdata(_DATA_DIR + res_dir + 'weights_orig.fits')
 co_data, hdr = pyfits.getdata(_DATA_DIR + res_dir + 'co_nieten.fits', header=True)
@@ -217,7 +215,7 @@ rcorr_delt_ha_i24, rcorr_delt_fuv_i24 = np.zeros(nt), np.zeros(nt)
 
 
 #sel = inner_reg #ring_reg inner_reg outer_reg None
-sel = None#ring_reg | inner_reg | outer_reg
+sel = inner_reg | ring_reg | outer_reg#None#ring_reg | inner_reg | outer_reg
 co = allco[sel]
 hi = allhi[sel]
 mdust = allmdust[sel]
@@ -252,25 +250,25 @@ for i in range(0, nt):
     sfr_delt = sfr_delt[sel]
     if sel == None:
         sfr_delt = sfr_delt[0,:,:]
-    
+
     # Calculate rank correlations
     rcorr_int_co[i] = (spearmanr(co[ind2], sfr[ind2]))[0]
     rcorr_int_hi[i] = (spearmanr(hi[ind], sfr[ind2]))[0]
     rcorr_int_tg[i] = (spearmanr(tg[ind], sfr[ind2]))[0]
     rcorr_int_mdust[i] = (spearmanr(mdust[ind2], sfr[ind2]))[0]
-    
+
     #rcorr_int_ha[i] = (spearmanr(ha[ind2], sfr[ind2]))[0]
     #rcorr_int_fuv[i] = (spearmanr(fuv[ind2], sfr[ind2]))[0]
     #rcorr_int_nuv[i] = (spearmanr(nuv[ind2], sfr[ind2]))[0]
     #rcorr_int_i24[i] = (spearmanr(i24[ind2], sfr[ind2]))[0]
     #rcorr_int_ha_i24[i] = (spearmanr(ha_i24[ind2], sfr[ind2]))[0]
     #rcorr_int_fuv_i24[i] = (spearmanr(fuv_i24[ind2], sfr[ind2]))[0]
-    
+
     rcorr_delt_co[i] = (spearmanr(co[ind2], sfr_delt[ind2]))[0]
     rcorr_delt_hi[i] = (spearmanr(hi[ind], sfr_delt[ind2]))[0]
     rcorr_delt_tg[i] = (spearmanr(tg[ind], sfr_delt[ind2]))[0]
     rcorr_delt_mdust[i] = (spearmanr(mdust[ind2], sfr_delt[ind2]))[0]
-        
+
     #rcorr_delt_ha[i] = (spearmanr(ha[ind2], sfr_delt[ind2]))[0]
     #rcorr_delt_fuv[i] = (spearmanr(fuv[ind2], sfr_delt[ind2]))[0]
     #rcorr_delt_nuv[i] = (spearmanr(nuv[ind2], sfr_delt[ind2]))[0]
@@ -318,10 +316,10 @@ if p2:
     pnfile = _PLOT_DIR + 'rcorr_delt_sfgas.' + args.format
     correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,
                                  lab, xlab2, ylab2, pnfile, save=args.save)
-    
 
 
-    
+
+
 lcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
 fcol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
 ecol = ['purple', 'PaleVioletRed', 'darkorange', 'navy', 'royalblue']
@@ -340,7 +338,7 @@ if p3:
 
 
 if p4:
-    yarr = [rcorr_delt_ha, rcorr_delt_fuv, rcorr_delt_i24, 
+    yarr = [rcorr_delt_ha, rcorr_delt_fuv, rcorr_delt_i24,
             rcorr_delt_ha_i24, rcorr_delt_fuv_i24]
     pnfile = _PLOT_DIR + 'rcorr_delt_sfsf.' + args.format
     correlation.plot_correlation(taxis, yarr, sym, lcol, fcol, ecol, ms,

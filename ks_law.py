@@ -22,15 +22,15 @@ ALPHA_CO = 4.35  #Msun / pc^2 (K km / s)^-1; equivalent to above XCO
 INCL = np.radians(77.)
 
 if os.environ['PATH'][1:6] == 'astro':
-    TOP_DIR = '/astro/store/phat/arlewis/'
+    _TOP_DIR = '/astro/store/phat/arlewis/'
 else:
-    TOP_DIR = '/Users/alexialewis/research/PHAT/'
+    _TOP_DIR = '/Users/alexialewis/research/PHAT/'
     os.environ['PATH'] = os.environ['PATH'] + ':/usr/texbin'
-    
 
-DATA_DIR = TOP_DIR + 'maps/analysis/'
-ISM_DIR = TOP_DIR + 'ism/project/'
-PLOT_DIR = ISM_DIR + 'plots/'
+
+_DATA_DIR = _TOP_DIR + 'maps/analysis/'
+_ISM_DIR = _TOP_DIR + 'ism/project/'
+_PLOT_DIR = _ISM_DIR + 'plots/'
 
 def get_args():
     """ Grab the command line arguments if necessary. """
@@ -102,16 +102,16 @@ def get_coords(data, hdr, m31_ra=10.6833, m31_dec=41.2692,
     pixel_matrix = pixels.reshape(data.shape[0], data.shape[1], 2)
     world = w.wcs_pix2world(pixels, 1)
     world_matrix = world.reshape(data.shape[0], data.shape[1], 2)
-    
+
     points = SkyCoord(world, frame='icrs', unit=w.wcs.cunit)
     coords = zip(points.ra, points.dec)
 
     coord = SkyCoord(coords, unit=u.deg)
-    rads, theta = deproject.correct_rgc(coord, 
+    rads, theta = deproject.correct_rgc(coord,
                                         glx_ctr=SkyCoord(m31_ra, m31_dec,
                                                          unit=u.deg),
-                                        glx_PA=Angle(pa, unit=u.deg), 
-                                        glx_incl=Angle(incl, unit=u.deg), 
+                                        glx_PA=Angle(pa, unit=u.deg),
+                                        glx_incl=Angle(incl, unit=u.deg),
                                         glx_dist=Distance(783, unit=u.kpc))
 
     return rads.reshape(orig_shape), theta.reshape(orig_shape)
@@ -160,26 +160,26 @@ def plot_contour(ax, xx, yy, bins=50, lw=2):
     extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
     levels = (1, 5, 10, 20, 50)
     colors = get_color_scheme(len(levels))
-    cset = ax.contour(H.T, levels, origin='lower', extent=extent, 
+    cset = ax.contour(H.T, levels, origin='lower', extent=extent,
                       linewidths=lw, colors=colors)
 
 
-def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None, 
+def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
               save=False):
     f, ax = plt.subplots(1, 3, figsize=(10, 4))
 
-    x1 = np.log10(sigma_hi)
-    x2 = np.log10(sigma_co)
-    x3 = np.log10(sigma_hi + sigma_co)
-    y = np.log10(sigma_sfr_100)
-    set_trace()
+    x1 = np.log10(sigma_hi).flatten()
+    x2 = np.log10(sigma_co).flatten()
+    x3 = np.log10(sigma_hi + sigma_co).flatten()
+    y = np.log10(sigma_sfr_100).flatten()
+
     sgas = 10**np.arange(-12, 3, 0.05)
     sfe100, sfe10, sfe1 = 1.0, 0.1, 0.01
 
     for i, x in enumerate([x1, x2, x3]):
         sel = (np.isfinite(x)) & (np.isfinite(y))
         sel2 = sel & (y > -6)
-        
+
         p = np.polyfit(x[sel2], y[sel2], 1)
         #p = curve_fit(linear_fit, x[sel], y[sel])
 
@@ -207,13 +207,13 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
         ax[i].xaxis.set_ticks([-2, -1, 0, 1, 2])
         ax[i].tick_params(axis='both', labelsize=14)
 
-        ax[i].text(0.06, 0.9, 'N = ' + nn, fontsize=14, 
+        ax[i].text(0.06, 0.9, 'N = ' + nn, fontsize=14,
                        transform=ax[i].transAxes)
 
 
     ax[1].yaxis.set_ticks([])
     ax[2].yaxis.set_ticks([])
-        
+
     ax[0].set_ylabel(r'${\rm log}_{10}\, \Sigma_{\rm SFR}\, \left[{\rm M}_{\odot} \, {\rm yr}^{-1} \, {\rm kpc}^{-2}\right]$', fontsize=18)
     ax[0].set_xlabel(r'${\rm log}_{10}\, \Sigma_{\rm HI} \, \left[{\rm M}_{\odot} \, {\rm pc}^{-2}\right]$', fontsize=18)
     ax[1].set_xlabel(r'${\rm log}_{10}\, \Sigma_{\rm H_2} \, \left[{\rm M}_{\odot} \, {\rm pc}^{-2}\right]$', fontsize=18)
@@ -224,17 +224,17 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
             time[0] = 0
         time_str = str(int(time[0])) + ' -- ' + str(int(time[1])) + ' Myr'
         ax[0].text(.06, 0.8, time_str, fontsize=16,
-                   transform=ax[0].transAxes) 
-        
+                   transform=ax[0].transAxes)
+
     plt.subplots_adjust(left=0.08, right=0.95, bottom=0.12, top=0.95,
                         wspace=0.02)
-    
+
     if save:
         if time is not None:
             time_str2 = str(int(time[0])) + '-' + str(int(time[1]))
-            plotfile = PLOT_DIR + 'sf_law_hi+h2_' + time_str2 + '_sfregions.png'
+            plotfile = _PLOT_DIR + 'sf_law_hi+h2_' + time_str2 + '_sfregions.png'
         else:
-            plotfile = PLOT_DIR + 'sf_law_hi+h2.png'
+            plotfile = P_LOT_DIR + 'sf_law_hi+h2.png'
         plt.savefig(plotfile, bbox_inches='tight', dpi=300)
     else:
         plt.show()
@@ -243,17 +243,22 @@ def plot_data(sigma_sfr, sigma_sfr_100, sigma_hi, sigma_co, time=None,
 def main(**kwargs):
     """ Spatially- and temporally-resolved Kennicutt-Schmidt star formation
     relation in M31. """
-    hi_file = DATA_DIR + 'hi_braun.fits'
-    co_file = DATA_DIR + 'co_nieten.fits'
-    #co_file = DATA_DIR + 'co_carma.fits'
-    sfr_files = sorted(glob.glob(DATA_DIR + 'sfr_evo*-*.fits'))#[:14]
 
-    regfile = TOP_DIR + 'ism/project/sf_regions_image.reg'
+    res_dir = 'res_90pc/'
+
+    hi_file = _DATA_DIR + res_dir + 'hi_braun.fits'
+    co_file = _DATA_DIR + res_dir + 'co_nieten.fits'
+    #co_file = DATA_DIR + 'co_carma.fits'
+    weights_file = _DATA_DIR + res_dir + 'weights_orig.fits'
+    sfr_files = sorted(glob.glob(_DATA_DIR + res_dir+ 'sfr_evo*-*.fits'))#[:14]
+
+    regfile = _TOP_DIR + 'ism/project/sf_regions_image.reg'
     regpaths = get_reg_coords(regfile)
 
     # get the gas: HI and CO
     hi_data, hi_hdr = get_data(hi_file)
     co_data, co_hdr = get_data(co_file)
+    weights, w_hdr = get_data(weights_file)
 
     dshape = co_data.shape[0], co_data.shape[1]
     pixels = get_pixel_coords(co_data, co_hdr)
@@ -272,8 +277,8 @@ def main(**kwargs):
     rads, theta = get_coords(hi_data, hi_hdr)
 
     # convert gas to surface density
-    sigma_hi = convert_to_density(hi_data, 'hi')
-    sigma_co = convert_to_density(co_data, 'co')
+    sigma_hi = convert_to_density(hi_data, 'hi') * weights
+    sigma_co = convert_to_density(co_data, 'co') * weights
 
     n_times = len(sfr_files)
     n_regions = len(sigma_hi.flatten())
@@ -296,9 +301,9 @@ def main(**kwargs):
                                      tstop=8.0)
     sfr316, t316 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.5)
     sfr400, t400 = get_avg_sfr(sfr_array, time_bins, tstart=6.6, tstop=8.6)
-    sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5, 
+    sfr300_400, t300_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.5,
                                        tstop=8.6)
-    sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0, 
+    sfr100_400, t100_400 = get_avg_sfr(sfr_array, time_bins, tstart=8.0,
                                        tstop=8.6)
     sfr30_40, t30_40 = get_avg_sfr(sfr_array, time_bins, tstart=7.5,
                                    tstop=7.6)
@@ -311,18 +316,24 @@ def main(**kwargs):
               t20_30]
 
     # select desired sfr time
-    #for ind in range(len(sfarray)):
-    for ind in [1]:
-        sigma_sfr = sfr_array / pix_area
+    for ind in range(len(sfarray)):
+    #for ind in [1]:
+        sigma_sfr = sfr_array[ind] / pix_area
         sfr_time, t_time = sfarray[ind], np.array(tarray[ind])/1e6
 #sfr10, np.array(t100)/1e6
         sigma_sfr_time = sfr_time / pix_area
 
         # choose only regions where values are finite
         sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_co.flatten())) & (np.isfinite(sigma_sfr_time)) & ((inner_reg.flatten()) | (ring_reg.flatten()) | (outer_reg.flatten()))
-        
+
         #sel = (np.isfinite(sigma_hi.flatten())) & (np.isfinite(sigma_sfr_time)) & ((outer_reg.flatten()))
 
+
+        total_sigma_hi = np.copy(sigma_hi)
+        total_sigma_hi[np.isnan(total_sigma_hi)] = 0.0
+        total_sigma_co = np.copy(sigma_co)
+        total_sigma_co[np.isnan(total_sigma_co)] = 0.0
+        total_gas = total_sigma_hi + total_sigma_co
 
 
         if args.plot:
@@ -330,13 +341,14 @@ def main(**kwargs):
             #          sigma_hi.flatten()[sel], sigma_co.flatten()[sel],
             #          time=t_time, save=kwargs['save'])
             plot_data(sigma_sfr, sigma_sfr_time,
-                      sigma_hi.flatten(), sigma_co.flatten(),
+                      total_sigma_hi, total_sigma_co,
                       time=t_time, save=kwargs['save'])
 
-            
+
     return sigma_sfr[:,sel], sigma_sfr_time[sel], sigma_hi.flatten()[sel], sigma_co.flatten()[sel]
 
 if __name__ == '__main__':
     args = get_args()
     sigma_sfr, sigma_sfr_time, sigma_hi, sigma_co = main(**vars(args))
     #main(**vars(args))
+
